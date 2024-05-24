@@ -1,0 +1,87 @@
+---
+title: "aproximacion-datalogger"
+output: html_document
+date: "2024-05-24"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(gridExtra)
+```
+
+Función para cargar los datos de GPS del datalogger.
+
+```{r}
+readGpsFile <- function(file) {
+  data<- read_tsv(file, col_names = FALSE, skip = 2) %>% 
+    filter(!grepl("[a-z]", X3)) %>% 
+    separate(X3, into = c("lat", "lon", "value1", "value2", "value3", "value4", "value5"), sep = "\t") %>% 
+    rename(date = X1, time=X2) %>% 
+    mutate(datetime = floor_date(timestamp)) # sin milisegundos
+  return(data)
+}
+```
+
+El siguiente es para cargar los datos del acelerómetro.
+
+```{r}
+readAccFile <- function(file) {
+  data <- read_tsv("bordy_S1.csv") %>% 
+    select(timestamp=Timestamp, x=X, y=Y, z=Z) %>% 
+    mutate(timestamp = strptime(timestamp, format = "%d/%m/%Y %H:%M:%OS", tz = "UTC")) %>% 
+    arrange(timestamp) %>% 
+    rowid_to_column("id")
+  data <- transform(data, lat = as.double(lat), lon = as.double(lon)) %>% 
+    mutate(date = dmy(date), datetime = ymd_hms(paste(date, time)))
+  return(data)
+}
+
+```
+
+```{r}
+gps_data <- readGpsFille("bordy_S1.txt")
+```
+
+Con el siguiente se pueden unir ambas tablas.
+
+```{r}
+prueba <- datos %>%
+  left_join(gps_data, join_by(datetime))
+head(pruebas)
+```
+
+Estos son los datos que tienen registros de acelerometro y gps.
+
+```{r}
+datos_con_gps <- prueba %>% 
+  filter(lat != "")
+
+```
+
+```{r}
+p1<-ggplot(prueba, aes(x = datetime)) +
+  geom_line(aes(y=x), color="red") +
+  ylab("accelerometro x")
+  #geom_line(aes(y=y), color="blue") +
+  #geom_line(aes(y=z), color="orange")
+
+p2 <- ggplot(prueba, aes(x=datetime)) +
+  geom_point(aes(y=lat)) +
+  theme(axis.text.y = element_blank())
+
+p3 <- ggplot(prueba, aes(x=datetime)) +
+  geom_point(aes(y=lon)) +
+  theme(axis.text.y = element_blank())
+    
+#library(grid)
+grid.newpage()
+grid.draw(rbind(ggplotGrob(p1), ggplotGrob(p2), ggplotGrob(p3), size = "last"))
+```
+
+```{r}
+#ggplot(datos_con_gps, aes(x = datetime, y = lat)) + geom_line() + 
+#  facet_grid(variable ~ ., scales = "free_y") + theme(legend.position = "none")
+```
+
+
